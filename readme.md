@@ -17,3 +17,23 @@ Point to use python and selenium to crawl data from a website.
     ```bash
     > cargo install geckodriver --lock
     ```
+
+- Dev requirements libraries in [requirements_dev.txt](requirements_dev.txt)
+  - Install dev requirements by command:
+    ```bash
+    > pip install -r dev-requirements.txt
+    ```
+
+
+## Run crawler
+run the main.py file
+```bash
+> python src/main.py
+```
+
+
+## Test crawler
+Test by `pytest`
+```bash
+> pytest .
+```
