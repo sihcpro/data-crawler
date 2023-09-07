@@ -1,14 +1,12 @@
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.remote.webelement import WebElement
 import json
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.remote.webelement import WebElement
 
 from constants import SITE
-from helper import wait_and_get_element, get_element_if_exists, wait_until_clickable
+from helper import get_element_if_exists, wait_and_get_element, wait_until_clickable
 
 
 def init_chrome_driver() -> webdriver.Chrome:
@@ -47,15 +45,12 @@ def get_search_results(driver: webdriver.WebKitGTK) -> list:
     Returns:
         dict: The search results.
     """
-    wait = WebDriverWait(driver, 10)
-    wait.until(EC.element_to_be_clickable((By.ID, "xboxholder")))
-    xboxholder = driver.find_element(By.ID, "xboxholder")
-    wait.until(EC.element_to_be_clickable((By.TAG_NAME, "b")))
-    if "no results" in xboxholder.find_element(By.TAG_NAME, "b").text:
+    wait_and_get_element(driver, By.ID, "xboxholder")
+    search_result = wait_and_get_element(driver, By.TAG_NAME, "b")
+    if not search_result or "no results" in search_result.text:
         return []
 
-    wait.until(EC.element_to_be_clickable((By.ID, "CFIResultList")))
-    search_table = driver.find_element(By.ID, "CFIResultList")
+    search_table = wait_and_get_element(driver, By.ID, "CFIResultList")
     results = search_table.find_elements(By.TAG_NAME, "tr")[1:]
     return results
 
@@ -68,7 +63,7 @@ def is_have_left_right_section(element: WebElement) -> bool:
         return False
 
 
-def get_attachment_info_from_activity(element: WebElement) -> dict:
+def get_attachment_info_from_activity(element: WebElement) -> list[dict]:
     content = element.find_element(By.ID, "WzBoDyI")
     documents = content.find_elements(By.TAG_NAME, "table")
     results = []
@@ -81,7 +76,7 @@ def get_attachment_info_from_activity(element: WebElement) -> dict:
     return results
 
 
-def get_file_activities(driver: webdriver.WebKitGTK, element: WebElement) -> list:
+def get_file_activities(driver: webdriver.WebKitGTK, element: WebElement) -> list[dict]:
     table = element.find_element(By.CLASS_NAME, "rectext")
     table_data = table.find_elements(By.TAG_NAME, "tr")[1:]
     results = []
@@ -102,7 +97,9 @@ def get_file_activities(driver: webdriver.WebKitGTK, element: WebElement) -> lis
     return results
 
 
-def get_section_data(driver: webdriver.WebKitGTK, element: WebElement):
+def get_section_data(
+    driver: webdriver.WebKitGTK, element: WebElement
+) -> tuple[str, str]:
     POSSIBLE_TITLE = ["reclabel"]
     POSSIBLE_VALUE = ["recvalue", "rectext"]
 
@@ -125,22 +122,27 @@ def get_section_data(driver: webdriver.WebKitGTK, element: WebElement):
     return title, value
 
 
-def generate_section_data(driver :webdriver.WebKitGTK, element: WebElement):
+def generate_section_data(
+    driver: webdriver.WebKitGTK, element: WebElement
+) -> tuple[str, str, int]:
     fields = element.find_elements(By.CLASS_NAME, "section")
     for i, field in enumerate(fields):
         if is_have_left_right_section(field):
-            title, value = get_section_data(driver, field.find_element(By.CLASS_NAME, "left"))
+            title, value = get_section_data(
+                driver, field.find_element(By.CLASS_NAME, "left")
+            )
             yield title, value, i
 
-            title, value = get_section_data(driver, field.find_element(By.CLASS_NAME, "right"))
+            title, value = get_section_data(
+                driver, field.find_element(By.CLASS_NAME, "right")
+            )
             yield title, value, i
         else:
             title, value = get_section_data(driver, field)
             yield title, value, i
 
 
-
-def get_primary_data(driver: webdriver.WebKitGTK):
+def get_primary_data(driver: webdriver.WebKitGTK) -> dict:
     MANDATORY_FIELDS = {"Title"}
     council_file = driver.find_element(By.CLASS_NAME, "cfheader").text.replace(
         "Council File: ", ""
@@ -155,7 +157,7 @@ def get_primary_data(driver: webdriver.WebKitGTK):
             continue
 
         if title in MANDATORY_FIELDS:
-            result[title]  = value
+            result[title] = value
         else:
             section_data = {"title": title, "value": value, "row_number": row_number}
             data.append(section_data)
@@ -164,7 +166,7 @@ def get_primary_data(driver: webdriver.WebKitGTK):
     return result
 
 
-def get_online_documents(driver: webdriver.WebKitGTK):
+def get_online_documents(driver: webdriver.WebKitGTK) -> dict:
     content = driver.find_element(By.ID, "CFI_OnlineDocsContent")
     table = content.find_elements(By.ID, "inscrolltbl")[1]
     table_data = table.find_elements(By.TAG_NAME, "tr")
@@ -175,10 +177,10 @@ def get_online_documents(driver: webdriver.WebKitGTK):
         href = get_element_if_exists(tabs[0], By.TAG_NAME, "a").get_attribute("href")
         result = {"title": title, "date": date, "href": href}
         results.append(result)
-    return {"Online Documents": results}
+    return results
 
 
-def get_vote_information(driver: webdriver.WebKitGTK):
+def get_vote_information(driver: webdriver.WebKitGTK) -> dict:
     content = driver.find_element(By.ID, "CFI_VotesContent")
     tables = content.find_elements(By.ID, "inscrolltbl")
 
@@ -200,17 +202,23 @@ def get_vote_information(driver: webdriver.WebKitGTK):
         member_vote = {"name": name, "cd": cd, "vote": vote}
         member_votes.append(member_vote)
     results["Member Information"] = member_votes
-    return {"Vote Information": results}
+    return results
 
 
 def get_data_from_data_page(driver: webdriver.WebKitGTK) -> dict:
     primary_data = get_primary_data(driver)
     online_documents = get_online_documents(driver)
     vote_information = get_vote_information(driver)
-    return primary_data | online_documents | vote_information
+    return {
+        **primary_data,
+        "Online Documents": online_documents,
+        "Vote Information": vote_information,
+    }
 
 
-def get_data_from_search_record(driver: webdriver.WebKitGTK, element: WebElement) -> dict:
+def get_data_from_search_record(
+    driver: webdriver.WebKitGTK, element: WebElement
+) -> dict:
     """Get the data from a search record. by open a new tab
 
     Args:
@@ -229,13 +237,13 @@ def get_data_from_search_record(driver: webdriver.WebKitGTK, element: WebElement
     return data
 
 
-def main(num_of_result: int=0) -> None:
+def main(num_of_result: int = 0) -> None:
     """
     The main function.
 
     Args:
         num_of_result (int, optional): The number of result to get.
-            Less then 0 if you want to  Defaults to 0.
+            Less then 0 if you want to get all results. Defaults to 0.
     """
     num_of_result -= 1
     driver = init_chrome_driver()

@@ -26,5 +26,4 @@ def test_get_online_documents(test_server, driver):
 
     driver.get(test_server.url)
     data = get_online_documents(driver)
-    assert "Online Documents" in data
-    TestCase().assertListEqual(expected_result, data["Online Documents"])
+    TestCase().assertListEqual(expected_result, data)
